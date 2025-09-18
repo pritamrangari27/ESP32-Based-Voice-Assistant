@@ -1,0 +1,206 @@
+#include <Arduino.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include "Audio.h"
+
+// Wi-Fi credentials
+const char* ssid = "Redmi 9";
+const char* password = "pass@1234";
+
+// Gemini API key
+const char* gemini_api_key = "AIzaSyB-K27p2sVGgSPdBZp82nJEyJMIGOnkAks";
+
+// I2S pins
+#define I2S_DOUT      14
+#define I2S_BCLK      33
+#define I2S_LRC       32
+
+Audio audio;
+WiFiServer server(80);
+
+// Function to check for stop requests
+bool checkForStop() {
+  WiFiClient client = server.available();
+  if (client) {
+    Serial.println("Phone connected (stop check)");
+    String request = "";
+    unsigned long timeout = millis() + 1000; // 1-second timeout
+    while (client.connected() && millis() < timeout) {
+      if (client.available()) {
+        request = client.readString();
+        Serial.println("Full request (stop check):");
+        Serial.println(request);
+        Serial.println("--- End of request ---");
+        break;
+      }
+    }
+
+    if (request.indexOf("POST /stop") != -1) {
+      Serial.println("Stop request received");
+      audio.stopSong();
+      audio.loop();
+      client.println("HTTP/1.1 200 OK");
+      client.println("Content-Type: text/plain");
+      client.println();
+      client.stop();
+      Serial.println("Audio stopped");
+      return true; // Stop detected
+    }
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-Type: text/plain");
+    client.println();
+    client.stop();
+  }
+  return false; // No stop detected
+}
+
+// Updated playTextInChunks with stop checking
+void playTextInChunks(String text, const char* language) {
+  const int maxChunkSize = 100;
+  int len = text.length();
+  Serial.print("Total length: ");
+  Serial.println(len);
+  for (int i = 0; i < len; i += maxChunkSize) {
+    String chunk = text.substring(i, min(i + maxChunkSize, len));
+    Serial.print("Playing chunk: ");
+    Serial.println(chunk);
+    audio.connecttospeech(chunk.c_str(), language);
+
+    // Play the chunk and check for stop periodically
+    while (audio.isRunning()) {
+      audio.loop();
+      if (checkForStop()) {
+        return; // Exit the function if stop is detected
+      }
+      delay(10);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println("connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  server.begin();
+  audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+  audio.setVolume(100);
+
+  // Test TTS
+  Serial.println("Testing TTS...");
+  playTextInChunks("Setup complete", "en");
+}
+
+void loop() {
+  WiFiClient client = server.available();
+  if (client) {
+    Serial.println("Phone connected");
+    String request = "";
+    String Question = "";
+
+    // Read the full request
+    unsigned long timeout = millis() + 5000;
+    while (client.connected() && millis() < timeout) {
+      if (client.available()) {
+        request = client.readString();
+        Serial.println("Full request:");
+        Serial.println(request);
+        Serial.println("--- End of request ---");
+        break;
+      }
+    }
+
+    // Check if it's a stop request
+    if (request.indexOf("POST /stop") != -1) {
+      Serial.println("Stop request received");
+      audio.stopSong();
+      audio.loop();
+      client.println("HTTP/1.1 200 OK");
+      client.println("Content-Type: text/plain");
+      client.println();
+      client.stop();
+      Serial.println("Audio stopped");
+    } else {
+      // Extract the body for a question
+      int bodyStart = request.indexOf("\r\n\r\n");
+      if (bodyStart != -1) {
+        Question = request.substring(bodyStart + 4);
+        Question.trim();
+        Serial.println("Extracted body: [" + Question + "]");
+      } else {
+        Serial.println("No body found in request");
+        Question = "";
+      }
+
+      // Send HTTP response
+      client.println("HTTP/1.1 200 OK");
+      client.println("Content-Type: text/plain");
+      client.println();
+      client.stop();
+
+      // Process the question
+      if (Question != "" && Question != "POST / HTTP/1.1" && Question.length() > 0) {
+        Question = "\"" + Question + "\"";
+        Serial.println("Sending to Gemini: " + Question);
+
+        if (WiFi.status() == WL_CONNECTED) {
+          HTTPClient https;
+          String url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" + String(gemini_api_key);
+          if (https.begin(url)) {
+            https.addHeader("Content-Type", "application/json");
+            String payload = "{\"contents\":[{\"parts\":[{\"text\": " + Question + "}]}]}";
+            int httpCode = https.POST(payload);
+
+            if (httpCode > 0) {
+              if (httpCode == HTTP_CODE_OK) {
+                String response = https.getString();
+                DynamicJsonDocument doc(8192);
+                DeserializationError error = deserializeJson(doc, response);
+
+                if (!error) {
+                  String Answer = doc["candidates"][0]["content"]["parts"][0]["text"];
+                  Answer.trim();
+                  Answer.replace("\n", " ");
+                  Answer.replace("*", "");
+                  Answer.replace("#", "");
+
+                  Serial.print("Answer: ");
+                  Serial.println(Answer);
+                  Serial.println("Starting TTS...");
+                  playTextInChunks(Answer, "en");
+                  Serial.println("TTS completed.");
+                } else {
+                  Serial.println("JSON parsing failed: " + String(error.c_str()));
+                }
+              } else {
+                Serial.printf("Gemini API HTTP error: %d\n", httpCode);
+              }
+            } else {
+              Serial.printf("Gemini API connection failed, error: %d\n", httpCode);
+            }
+            https.end();
+          } else {
+            Serial.println("Unable to connect to Gemini API (begin failed)");
+          }
+        } else {
+          Serial.println("No internet connection");
+        }
+      } else {
+        Serial.println("No valid question received");
+      }
+    }
+  }
+  audio.loop();
+  delay(100);
+}
