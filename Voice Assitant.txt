@@ -156,7 +156,7 @@ void loop() {
 
         if (WiFi.status() == WL_CONNECTED) {
           HTTPClient https;
-          String url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" + String(gemini_api_key);
+          String url = "Your Url" + String(gemini_api_key);
           if (https.begin(url)) {
             https.addHeader("Content-Type", "application/json");
             String payload = "{\"contents\":[{\"parts\":[{\"text\": " + Question + "}]}]}";
