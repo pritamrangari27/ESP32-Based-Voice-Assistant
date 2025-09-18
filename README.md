@@ -38,7 +38,3 @@ This project contains resources and code for a Voice Assistant application, incl
 
 - Modern web browser (for web demo)
 - Android device (for APK)
-
-## License
-
-Specify your license here.
