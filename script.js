@@ -27,7 +27,7 @@ startBtn.addEventListener("click", () => {
 
 // Function to send the voice input to ESP32
 function sendToESP32(text) {
-    const esp32Url = "http://192.168.1.10/voice"; // Replace with your ESP32's actual IP
+    const esp32Url = "Your Url"; // Replace with your ESP32's actual IP
 
     fetch(esp32Url, {
         method: "POST",
@@ -44,3 +44,4 @@ function sendToESP32(text) {
         console.error("Error sending data to ESP32:", error);
     });
 }
+
