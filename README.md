@@ -17,7 +17,7 @@ This project contains resources and code for a Voice Assistant application, incl
 
 - `PAI Research Paper/`  
   Research papers and documentation.
-  - `CA.docx`, `IJARSCT.docx`, `PAI Research Paper.pdf`
+ `https://www.ijarsct.co.in/Paper25577.pdf`
 
 - `Voice Assitant.txt`  
   Additional notes or documentation.
