@@ -5,11 +5,11 @@
 #include "Audio.h"
 
 // Wi-Fi credentials
-const char* ssid = "Redmi 9";
-const char* password = "pass@1234";
+const char* ssid = "Your SSID";
+const char* password = "Your Password";
 
 // Gemini API key
-const char* gemini_api_key = "AIzaSyB-K27p2sVGgSPdBZp82nJEyJMIGOnkAks";
+const char* gemini_api_key = "Your API Keys";
 
 // I2S pins
 #define I2S_DOUT      14
