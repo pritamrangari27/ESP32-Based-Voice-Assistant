@@ -1,5 +1,4 @@
 # ESP32-Based-Voice-Assistant
-## Overview
 
 This project contains resources and code for a Voice Assistant application, including research papers, an Android APK, and a web-based voice assistant demo.
 
